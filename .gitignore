@@ -3,9 +3,5 @@
 .RData
 .Ruserdata
 packrat/lib*/
-<<<<<<< HEAD
 *.log
 *.rds
-=======
-*.log
->>>>>>> 7388892cf79c26c61b90eee6ca8f42912f198eb4
