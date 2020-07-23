@@ -13,20 +13,33 @@ functions {
                     real[] theta,   // Parameters
                     real[] x_r,     // Data (real)
                     int[] x_i) {    // Data (integer)
-    real T = theta[1];
-    real r0 = theta[2];
-    real alpha = theta[3];
+    real T = theta[1];              // Thermal portion temperature
+    real r0 = theta[2];             // Thermal/epithermal cross-over
+    real alpha = theta[3];          // Pareto Exponent
     real v;
-    v = ((1 - x/r0 + (x/r0)^2) / (1 + x/r0)^2)^(r0 / (T * 6)) * 
-      x / (1 + (x/r0)^3)^((2 + alpha)/3) *
-      exp(r0 / (sqrt(3) * T) * atan((1 - 2 * x / r0) / sqrt(3)));
+    /*
+    if (x > 1)
+    */
+      v = ((1 - x/r0 + (x/r0)^2) / (1 + x/r0)^2)^(r0 / (T * 6)) * 
+        x / (1 + (x/r0)^3)^((2 + alpha)/3) *
+        exp(r0 / (sqrt(3) * T) * atan((1 - 2 * x / r0) / sqrt(3)));
+    /*
+    else if (x > 0.5)
+      v = ((1 - (1-xc)/r0 + ((1-xc)/r0)^2) / (1 + (1-xc)/r0)^2)^(r0 / (T * 6)) * 
+        (1-xc) / (1 + ((1-xc)/r0)^3)^((2 + alpha)/3) *
+        exp(r0 / (sqrt(3) * T) * atan((1 - 2 * (1-xc) / r0) / sqrt(3)));
+    else
+      v = ((1 - xc/r0 + (xc/r0)^2) / (1 + xc/r0)^2)^(r0 / (T * 6)) * 
+        xc / (1 + (xc/r0)^3)^((2 + alpha)/3) *
+        exp(r0 / (sqrt(3) * T) * atan((1 - 2 * xc / r0) / sqrt(3)));
+    */
     return v;
   }
   real maxwell_int( real[] limits, real[] theta, data real[] x_r) {
     int x_i[0];
     real lowlim = limits[1];
     real uplim = limits[2];
-    return integrate_1d(maxwell_dist, lowlim, uplim, theta, x_r, x_i, 1e-8);
+    return integrate_1d(maxwell_dist, lowlim, uplim, theta, x_r, x_i, 1.49e-8);
   }
 }
 
@@ -40,7 +53,7 @@ data {
 transformed data {
   real x_r[0];
   vector[N] y_norm;
-  y_norm = log(y / sum(y));        // norm the bin occupancy into a probability
+  y_norm = log(y / sum(y));   // log norm the bin occupancy into a probability
 }
 
 // The parameters accepted by the model.
@@ -54,12 +67,13 @@ parameters {
 // Generate the predicted values from the parameter space
 transformed parameters {
   vector[N] y_hat;
-  for (n in 1:N)
+  for (n in 1:N) {
     if (n < N)
       y_hat[n] = maxwell_int({x[n], x[n + 1]}, {T, r0, alpha}, x_r);
     else
       y_hat[n] = maxwell_int({x[n], positive_infinity()}, {T, r0, alpha}, x_r);
-  y_hat = log(y_hat / sum(y_hat)); // normalization of estimated distribution
+  }
+  y_hat = log(y_hat / sum(y_hat)); // log normalization of estimated distribution
 }
 
 // The model to be estimated. We model the output

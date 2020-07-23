@@ -13,9 +13,9 @@ functions {
                   real[] theta,   // Parameters
                   real[] x_r,     // Data (real)
                   int[] x_i) {    // Data (integer)
-    real T = theta[1];
-    real r0 = theta[2];
-    real alpha = theta[3];
+    real T = theta[1];            // Thermal portion temperature
+    real r0 = theta[2];           // Thermal/epithermal cross-over
+    real alpha = theta[3];        // Pareto Exponent
     real v;
     v = 1/(1 + (x/r0)^2)^((1+ alpha)/2) * exp(-r0/T * atan(x/r0));
     return v;
@@ -24,7 +24,7 @@ functions {
     int x_i[0];
     real lowlim = limits[1];
     real uplim = limits[2];
-    return integrate_1d(gibbs_dist, lowlim, uplim, theta, x_r, x_i, 1e-8);
+    return integrate_1d(gibbs_dist, lowlim, uplim, theta, x_r, x_i, 1.49e-8);
   }
 }
 
@@ -38,7 +38,7 @@ data {
 transformed data {
   real x_r[0];
   vector[N] y_norm;
-  y_norm = log(y / sum(y));        // norm the bin occupancy into a probability
+  y_norm = log(y / sum(y));   // log norm the bin occupancy into a probability
 }
 
 // The parameters accepted by the model.

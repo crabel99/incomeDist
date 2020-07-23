@@ -9,11 +9,10 @@ AICc <- function(k, n, lpd) {
 }
 
 # Load Data
-load("./Table 2.1.RData")
+# load("./Table 1.1.RData")
 
 # Load Libraries
 library(rstan)
-library(StanHeaders)
 library(BH)
 library(RcppEigen)
 library(Rcpp)
@@ -21,22 +20,27 @@ library(inline)
 library(fitdistrplus)
 
 rstan_options(auto_write = TRUE)
+options(mc.cores = parallel::detectCores())
 
 expose_stan_functions("./gibbs_model.stan")
 expose_stan_functions("./maxwell_model.stan")
 
-# Configure data for processing
-years <- names(totalIncome)
-years <- years[-1]
+# Configure the environment
+nChains <- 1
+nCores <- min(nChains, parallel::detectCores())
 
-# Initialization data
-inits <- list(
-  list ('sigma' = 100, 'T' = 10000, 'r0' = 50000, 'alpha' = 1),
-  list ('sigma' = 5000, 'T' = 20000, 'r0' = 75000, 'alpha' = 1.4),
-  list ('sigma' = 10000, 'T' = 40000, 'r0' = 100000, 'alpha' = 1.6),
-  list ('sigma' = 100, 'T' = 60000, 'r0' = 150000, 'alpha' = 2))
-nChains <- length(inits)
-nCores <- nChains
+# Configure data for processing
+years <- names(binReturns)
+binVect <- names(binMin)
+
+# Initialization data from prior distributions
+initf <- function() {
+  list(
+    "sigma" = rgamma(1, 2, 8e-6),
+    "T" = rgamma(1, 4, 8e-5),
+    "r0" = rgamma(1, 4, 4e-5),
+    "alpha" = rgamma(1, 2, 1))
+}
 
 # Output prototypes
 fitEval <- data.frame(aicGibbs = double(),
@@ -61,31 +65,36 @@ params <- c("sigma", "T", "r0", "alpha", "lpd") # output parameters
 
 # Loop through each of the years
 for (i in 1:length(years)) {
-  # The IRS added additional income brackets in 2000
-  if (as.numeric(years[i]) < 2000) {
-    bins <- 18
-  } else {
-    bins <- 22
+  # The IRS data bins varry from year to year
+  for (j in length(binVect):1){
+    if ( years[i] >= binVect[j]) {
+      bins <- length(binReturns[[i]])
+      x <- binMin[[j]]
+    }
   }
   y_hat <- vector(mode = "numeric", length = bins)
+  y <- binReturns[[i]]
+  y <- y/sum(y)
   incomeData <- list ('N' = bins,
-                      'x' = totalIncome[1:bins, 1],
-                      'y' = totalIncome[1:bins, i + 1])
-  y <- incomeData$y/sum(incomeData$y)
+                      'x' = x,
+                      'y' = y)
   
+  # print(incomeData)
+  # print(inits)
   # Process the data
-  fitGibbs <- stan(file = './gibbs_model.stan',
-                   data = incomeData,
-                   chains = nChains,
-                   init = inits,
-                   pars = params,
-                   cores = nCores)
   fitMaxwell <- stan(file = './maxwell_model.stan',
                      data = incomeData,
                      chains = nChains,
-                     init = inits,
+                     init = initf,
                      pars = params,
                      cores = nCores)
+  fitGibbs <- stan(file = './gibbs_model.stan',
+                   data = incomeData,
+                   chains = nChains,
+                   init = initf,
+                   pars = params,
+                   cores = nCores)
+  
   
   # Condition the data for the modified Gibbs distribution
   draws <- extract(fitGibbs, pars = params)
@@ -95,19 +104,15 @@ for (i in 1:length(years)) {
                     "alpha" = mean(draws$alpha))
   for (j in 1:bins) {
     if (j < bins) {
-      y_hat[j] <- gibbs_int(c(totalIncome$Min[j],
-                              totalIncome$Min[j + 1]),
-                            as.numeric(reg[1,]),
-                            double())
+      y_hat[j] <- gibbs_int(c(x[j], x[j + 1]), as.numeric(reg[1,]), double())
     } else {
-      y_hat[j] <- gibbs_int(c(totalIncome$Min[j], Inf),
-                              as.numeric(reg[1,]),
-                              double())
+      y_hat[j] <- gibbs_int(c(x[j], Inf), as.numeric(reg[1,]), double())
     }
   }
   reg$C <- sum(y_hat)
   y_hat <- y_hat/reg$C
-  fit <- data.frame(row.names = years[i], sseGibbs = sum((y - y_hat)^2))
+  fit <- data.frame(row.names = years[i], 
+                    sseGibbs = sum((y - y_hat)^2))
   fit$aicGibbs <- AICc(3, bins, mean(draws$lpd))
   
   # Determine the posterior-prior information distribution
@@ -137,14 +142,9 @@ for (i in 1:length(years)) {
                     "alpha" = mean(draws$alpha))
   for (j in 1:bins) {
     if (j < bins) {
-      y_hat[j] <- maxwell_int(c(totalIncome$Min[j],
-                                totalIncome$Min[j + 1]),
-                              as.numeric(reg[1,]),
-                              double())
+      y_hat[j] <- maxwell_int(c(x[j], x[j + 1]), as.numeric(reg[1,]), double())
     } else {
-      y_hat[j] <- maxwell_int(c(totalIncome$Min[j], Inf),
-                              as.numeric(reg[1,]),
-                              double())
+      y_hat[j] <- maxwell_int(c(x[j], Inf), as.numeric(reg[1,]), double())
     }
   }
   reg$C <- sum(y_hat)
@@ -175,11 +175,12 @@ for (i in 1:length(years)) {
 }
 
 # Clean up the workspace
-rm(prior, fit, y_hat, reg, draws, inits, y, incomeData, years, nChains, params)
-rm(pd, i, j, bins, AICc, gibbs_dist, gibbs_int, maxwell_dist, maxwell_int, nCores)
+rm(prior, fit, y_hat, reg, draws, initf, y, incomeData, years, nChains, params,
+   pd, i, j, bins, AICc, gibbs_dist, gibbs_int, maxwell_dist, maxwell_int, 
+   nCores, binVect, x)
 
 # Uncomment to delete the rstan output
 # rm(fitGibbs, fitMaxwell)
 
 # Save the workspace
-save.image("./model_output.RData")
+save.image("./model_output_1.1.RData")

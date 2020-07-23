@@ -9,11 +9,11 @@ output: pdf_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## R Markdown
+## Introduction
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+The purpose of the attached code is to compare the fit of two different models to income data in the United States over a 25-year period. The two models examined are a modified Gibbs distribution and a modified Maxwell distribution. The modification to both of these distributions is the inclusion of a Pareto distribution to account for the shape of the right hand tails. The modification is done through a solution to the stationary Fokker-Plank equation.
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+The income data used is the Adjusted Gross Income (AGI) taken from Table 1.1
 
 ```{r cars}
 summary(cars)
