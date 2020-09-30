@@ -1,4 +1,15 @@
-library(EnvStats)
+# Load Libraries
+suppressPackageStartupMessages({
+  library(rstan)
+  library(EnvStats)
+})
+
+message("Compiling the Stan code modules... ", appendLF = FALSE)
+suppressMessages({
+  expose_stan_functions("./gibbs_model.stan")
+  expose_stan_functions("./maxwell_model.stan")
+})
+message("COMPLETE")
 
 years <- names(binReturns)
 y_maxwell <- list()
@@ -9,7 +20,7 @@ for (i in 1:length(years)) {
   
   yrName = toString(years[i])
   
-  for (j in length(binVect):1){
+  for (j in length(binVect):1) {
     if ( years[i] >= binVect[j]) {
       bins <- length(binReturns[[yrName]])
       x <- binMin[[j]]
@@ -17,7 +28,7 @@ for (i in 1:length(years)) {
   }
   y_hat <- vector(mode = "numeric", length = bins)
   for (j in 1:bins) {
-    if (j < bins){
+    if (j < bins) {
       y_hat[j] <- maxwell_int(limits = c(x[j], x[j + 1]),
                               theta = as.numeric(regMaxwell[i, 1:3]), 
                               x_r = double()) / 
@@ -31,7 +42,7 @@ for (i in 1:length(years)) {
   }
   y_maxwell[[toString(years[i])]] <- y_hat
   for (j in 1:bins) {
-    if (j < bins){
+    if (j < bins) {
       y_hat[j] <- gibbs_int(limits = c(x[j], x[j + 1]),
                             theta = as.numeric(regGibbs[i, 1:3]), 
                             x_r = double()) / 
@@ -47,31 +58,40 @@ for (i in 1:length(years)) {
 }
 rm( i, j, y_hat, bins)
 
-i <- 25
-for (j in length(binVect):1){
+i <- 21
+for (j in length(binVect):1) {
   if ( years[i] >= binVect[j]) {
     x <- binMin[[j]]
   }
 }
 yrName = toString(years[i])
-plot(x, 
-     binReturns[[yrName]], 
-     ylim = range(c(binReturns[[yrName]], 
-                    y_maxwell[[yrName]], 
-                    y_gibbs[[yrName]])),
-     main = paste('US Income Distribution for', yrName),
-     xlab = 'Income [$ Nominal]',
-     ylab = '# of People',
-     log = 'xy')
+plot(
+  x[-1],
+  binReturns[[yrName]][-1],
+  ylim = range(c(binReturns[[yrName]][-1],
+                 y_maxwell[[yrName]][-1],
+                 y_gibbs[[yrName]][-1])),
+  main = paste(
+    'US Table',
+    '1.1',#table,
+    'Taxable Income Distribution for',
+    yrName
+  ),
+  xlab = 'Income [$ Nominal]',
+  ylab = '# of People',
+  log = 'xy'
+)
 lines(x, y_maxwell[[yrName]], col = "red")
-lines(x, y_gibbs[[yrName]], col = "blue") 
-legend("bottomleft",
-       inset = 0.02,
-       c("IRS Data", "Mod Maxwell", "Mod Gibbs"),
-       cex=.8,
-       col=c("black", "red", "blue"),
-       pch=c(1, NA, NA),
-       lty=c(NA, 1, 1))
+lines(x, y_gibbs[[yrName]], col = "blue")
+legend(
+  "bottomleft",
+  inset = 0.02,
+  c("IRS Data", "Mod Maxwell", "Mod Gibbs"),
+  cex = 0.8,
+  col = c("black", "red", "blue"),
+  pch = c(1, NA, NA),
+  lty = c(NA, 1, 1)
+)
 
 # find the cross over point noted by Banerjee 2010
 # With the regression done using 
@@ -98,19 +118,33 @@ fGibbs <- function(x) gibbs_dist(x, NaN, as.numeric(regGibbs[i, 1:3]),
 fMaxwell <- function(x) maxwell_dist(x, NaN, as.numeric(regMaxwell[i, 1:3]),
                                      double(), integer()) / regMaxwell[i, 4]
 
-plot(Vectorize(fMaxwell), 1, 1e8, 
-     main = paste('US Income Distribution for', yrName),
-     xlab = 'Income [$ Nominal]', ylab = 'Density',
-     log = 'xy', col = "red")
-par(new=TRUE)
-plot(Vectorize(fGibbs), 1, 1e8,
-     main = paste('US Income Distribution for', yrName),
-     xlab = 'Income [$ Nominal]', ylab = 'Density',
-     log = 'xy', col = "blue")
-legend("topright",
-       inset = 0.02,
-       c("Mod Maxwell", "Mod Gibbs"),
-       cex=.8,
-       col=c("red", "blue"),
-       pch=c(NA,NA),
-       lty=c(1,1))
+plot(
+  Vectorize(fMaxwell),
+  1,
+  1e8,
+  main = paste('US Income Distribution for', yrName),
+  xlab = 'Income [$ Nominal]',
+  ylab = 'Density',
+  log = 'xy',
+  col = "red"
+)
+par(new = TRUE)
+plot(
+  Vectorize(fGibbs),
+  1,
+  1e8,
+  main = paste('US Income Distribution for', yrName),
+  xlab = 'Income [$ Nominal]',
+  ylab = 'Density',
+  log = 'xy',
+  col = "blue"
+)
+legend(
+  "topright",
+  inset = 0.02,
+  c("Mod Maxwell", "Mod Gibbs"),
+  cex = 0.8,
+  col = c("red", "blue"),
+  pch = c(NA, NA),
+  lty = c(1, 1)
+)

@@ -7,6 +7,7 @@
 */
 
 functions {
+  // This function is the modified distribution
   real maxwell_dist(real x,         // Function argument
                     real xc,        // Complement of function argument on the
                                     // domain (defined later)
@@ -17,29 +18,46 @@ functions {
     real r0 = theta[2];             // Thermal/epithermal cross-over
     real alpha = theta[3];          // Pareto Exponent
     real v;
-    /*
-    if (x > 1)
-    */
-      v = ((1 - x/r0 + (x/r0)^2) / (1 + x/r0)^2)^(r0 / (T * 6)) * 
+    v = ((1 - x/r0 + (x/r0)^2) / (1 + x/r0)^2)^(r0 / (T * 6)) * 
         x / (1 + (x/r0)^3)^((2 + alpha)/3) *
         exp(r0 / (sqrt(3) * T) * atan((1 - 2 * x / r0) / sqrt(3)));
-    /*
-    else if (x > 0.5)
-      v = ((1 - (1-xc)/r0 + ((1-xc)/r0)^2) / (1 + (1-xc)/r0)^2)^(r0 / (T * 6)) * 
-        (1-xc) / (1 + ((1-xc)/r0)^3)^((2 + alpha)/3) *
-        exp(r0 / (sqrt(3) * T) * atan((1 - 2 * (1-xc) / r0) / sqrt(3)));
-    else
-      v = ((1 - xc/r0 + (xc/r0)^2) / (1 + xc/r0)^2)^(r0 / (T * 6)) * 
-        xc / (1 + (xc/r0)^3)^((2 + alpha)/3) *
-        exp(r0 / (sqrt(3) * T) * atan((1 - 2 * xc / r0) / sqrt(3)));
-    */
     return v;
   }
+  // This function integrates the modified distribution over the specified range
   real maxwell_int( real[] limits, real[] theta, data real[] x_r) {
-    int x_i[0];
-    real lowlim = limits[1];
-    real uplim = limits[2];
-    return integrate_1d(maxwell_dist, lowlim, uplim, theta, x_r, x_i, 1.49e-8);
+      int x_i[0];
+      real lowlim = limits[1];
+      real uplim = limits[2];
+      return integrate_1d(maxwell_dist, lowlim, uplim, theta, x_r, x_i, 1.49e-8);
+  }
+  // This is the integrand for determining the entropy
+  real maxwell_integrand(real x,         // Function argument
+                   real xc,        // Complement of function argument on the
+                                   // domain (defined later)
+                   real[] theta,   // Parameters
+                   real[] x_r,     // Data (real)
+                   int[] x_i) {    // Data (integer)
+      real c = maxwell_int({0, positive_infinity()}, theta, x_r);
+      real T = theta[1];              // Thermal portion temperature
+      real r0 = theta[2];             // Thermal/epithermal cross-over
+      real alpha = theta[3];          // Pareto Exponent
+      real v;
+      v = ((1 - x/r0 + (x/r0)^2) / (1 + x/r0)^2)^(r0 / (T * 6)) *
+          x / (1 + (x/r0)^3)^((2 + alpha)/3) *
+          exp(r0 / (sqrt(3) * T) * atan((1 - 2 * x / r0) / sqrt(3)));
+      v = -log(v / c) * v / c;
+      if (x == 0 || x == positive_infinity())
+          v = 0;
+      return v;
+  }
+  // This function returns the entropy
+  real maxwell_ent( real[] theta, data real[] x_r) {
+      int x_i[0];
+      // The integration method breaks down numerically at the extrema and
+      // gives odd results.
+      real lowlim = 1e-40;//0;
+      real uplim = 1e20;//positive_infinity();
+      return integrate_1d(maxwell_integrand, lowlim, uplim, theta, x_r, x_i, 1.49e-8);
   }
 }
 
